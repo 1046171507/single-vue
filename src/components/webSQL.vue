@@ -6,6 +6,7 @@
 		<p><button @click="buttFn2">Web SQL</button></p>
 		<p><button @click="buttFn3">Web SQL</button></p>
 		<p><button @click="buttFn4">Web SQL</button></p>
+		<img src="./img-xx.jpg"/>
 	</div>
 </template>
 <script>

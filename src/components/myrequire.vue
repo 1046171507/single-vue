@@ -10,20 +10,22 @@
 </template>
 <script>
 	/*
-	按需引入iview
-	import Checkbox from 'iview/src/components/checkbox';
-	*/
-	
+		按需引入iview
+		import Checkbox from 'iview/src/components/checkbox';
+		*/
+
 	export default {
 		name: 'myrequire',
 		components: { //组件
-			Checkbox: () => import('iview/src/components/checkbox'), //组件懒加载,按需引入iview
-			ISwitch: () => import('iview/src/components/switch')//Switch为保留字,需要改为i-switch
+			Checkbox: () =>
+				import('iview/src/components/checkbox'), //组件懒加载,按需引入iview
+			ISwitch: () =>
+				import('iview/src/components/switch') //Switch为保留字,需要改为i-switch
 		},
 		data() {
 			return {
 				requireB: false,
-				iViewCss:false,
+				iViewCss: false,
 			}
 		},
 		computed: { //计算
@@ -36,7 +38,7 @@
 					myrequire(['link!iview'], function() {
 						console.log('加载cdn成功');
 						/*_this.requireB = true;//myrequire本身就不会重复加载*/
-					}, function() {//加载cdn失败后加载本地
+					}, function() { //加载cdn失败后加载本地
 						myrequire(['link!iviewL'])
 					})
 				}
@@ -49,5 +51,7 @@
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="less">
-
+	.myrequire {
+		background: url(./img-xx.jpg);
+	}
 </style>
