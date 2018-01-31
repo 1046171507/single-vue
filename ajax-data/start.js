@@ -2,8 +2,6 @@ var http = (function() {
 
 	"use strict";
 
-	console.time('[HttpServer][Start]');
-
 	//http协议模块
 	var http = require('http');
 	//url解析模块
@@ -27,7 +25,6 @@ var http = (function() {
 			//在指定的端口监听服务
 			httpServer.listen(port, function() {
 				console.log("[HttpServer][Start]", "runing at http://" + ip + ":" + port + "/");
-				console.timeEnd("[HttpServer][Start]");
 			});
 
 			httpServer.on("error", function(error) {
@@ -41,116 +38,165 @@ var http = (function() {
 		 * @param response
 		 */
 		processRequest: function(request, response) {
-			/*
-			 * request.headers={
-			 * 		host:'localhost:8888',
-			 *		connection:'keep-alive',
-			 *		'user-agent':'浏览器信息',
-			 * 		accept:'* / *或text/html,application/xhtml+xml,...,...或text/css,* / *;q=0.1'
-			 * 		referer:'http://localhost:8888/home',
-			 * 		'accept-encoding':'gzip,deflate,br',
-			 * 		'accept-language':'zh-CN,zh;q=0.8'
-			 * }
-			 * request.url='static/js/xx.js'
-			 * request.method='GET'
-			 */
-			var hasExt = true;
-			var requestUrl = request.url;
-			var pathName = url.parse(requestUrl).pathname;
-			//console.log(request.headers);
-			//console.log(url.parse(requestUrl, true));
-			//
-			var httpData;
-			var httpMethod = request.method;
-			var postData = '';
-			if(httpMethod == 'POST') {
-				request.on('data', function(chunk) {
-					postData += chunk;
-				});
-				request.on('end', function() {
-					//console.log(postData);
-					if(postData != '') {
-						if(request.headers.accept.match('json')) {
-							httpData = JSON.parse(unescape(postData))
-						} else {
-							httpData = querystring.parse(postData)
-						}
-					}
-				});
-			} else {
-				httpData = url.parse(requestUrl, true).query;
-			}
-			/*request.on('data', function(chunk) {
-				//console.log(chunk.toString());//post提交请求,伪form提交请求
-				//console.log(querystring.parse(chunk));//纯form提交请求
-			});*/
 
-			//对请求的路径进行解码，防止中文乱码
-			pathName = decodeURI(pathName);
+			var requestUrlParse = url.parse(request.url, true) //格式化请求信息
+			var pathName = requestUrlParse.pathname; //请求路径
+			var pathData = requestUrlParse.query; //请求传参
 
-			//获取资源文件的相对路径
-			var filePath = path.join("data", pathName);
+			pathName = decodeURI(pathName); //对请求的路径进行解码，防止中文乱码
 
-			//获取对应文件的文档类型
-			var contentType = this.getContentType(filePath);
+			var rootPath = this.config.path;
+			var filePath = path.join(rootPath, pathName); //获取资源文件的绝对路径
 
-			//如果文件名存在
+			var contentType = this.getContentType(filePath); //获取对应文件的文档类型
+
+			var httpMethod = request.method; //请求方式
+
 			fs.exists(filePath, function(exists) {
-				if(exists) {
-					response.writeHead(200, {
-						"content-type": contentType
-					});
-					var stream = fs.createReadStream(filePath, {
-						flags: "r",
-						encoding: null
-					});
-					stream.on("error", function() {
-						response.writeHead(500, {
-							"content-type": "text/html"
-						});
-						response.end("<h1>500 Server Error</h1>");
-					});
-					//返回文件内容
-					//stream.pipe(response);
+				if(exists) { //如果文件(夹)名存在
 
-					//判断请求是否有data值,如果有,返回"httpData"
-					if(httpData != undefined) {
+					if(contentType != "application/octet-stream") { //文件存在
+
+						if(httpMethod == 'POST') {
+							var postData = '';
+							request.on('data', function(chunk) { //二进制流一节一节的接受文件
+								postData += chunk;
+							});
+							request.on('end', function() { //文件接受完
+								if(postData != '') {
+									postData = unescape(postData); //解码二进制流
+									pathData = querystring.parse(postData);
+								}
+						
+								response.writeHead(200, {
+									"Content-Type": "application/json"
+								});
+						
+								var jsonText = JSON.stringify(pathData); //json转字符串
+								response.end(jsonText); //返回json字符
+							});
+						} else {
+							//git请求
+							response.writeHead(200, {
+								"content-type": contentType
+							});
+							var stream = fs.createReadStream(filePath, {
+								flags: "r",
+								encoding: null
+							});
+							stream.on("error", function() {
+								response.writeHead(500, {
+									"content-type": "text/html"
+								});
+								response.end("<h1>500 Server Error</h1>");
+							});
+							stream.pipe(response); //返回文件流
+						}
+
+						/* //重定向
+						response.writeHead(302, {
+							'Location': 'index.html'
+						});
+						response.end();*/
+
+						/*//304缓冲
+						var fsStat = fs.statSync(filePath); //获取文件信息
+						var fsMtime = fsStat.mtime.toUTCString(); //获取文件修改时间
+
+						if(request.headers["if-modified-since"] == fsMtime) { //如果需要请求的文件没有修改,返回304。服务器告诉客户，原来缓冲的文档还可以继续使用。
+							response.writeHead(304);
+							response.end();
+						} else {
+							response.writeHead(200, {
+								"content-type": contentType,
+								"Last-Modified": fsMtime
+							});
+							var stream = fs.createReadStream(filePath, {
+								flags: "r",
+								encoding: null
+							});
+							stream.on("error", function() {
+								response.writeHead(500, {
+									"content-type": "text/html"
+								});
+								response.end("<h1>500 Server Error</h1>");
+							});
+							stream.pipe(response); //返回文件流
+						}
+						*/
+
+						/*
 						response.writeHead(200, {
-							"Content-Type": "application/json"
+							"content-type": contentType,
 						});
-						response.end(JSON.stringify(httpData));
-					} else {
-						stream.pipe(response);
-					}
-				} else { //文件名不存在的情况
-					if(hasExt) {
-						//如果这个文件不是程序自动添加的，直接返回404
-						response.writeHead(404, {
-							"content-type": "text/html"
+						var stream = fs.createReadStream(filePath, {
+							flags: "r",
+							encoding: null
 						});
-						response.end("<h1>404 Not Found</h1>");
-					} else {
-						//如果文件是程序自动添加的且不存在，则表示用户希望访问的是该目录下的文件列表
-						var html = "<head><meta charset='utf-8'></head>";
+						stream.on("error", function() {
+							response.writeHead(500, {
+								"content-type": "text/html"
+							});
+							response.end("<h1>500 Server Error</h1>");
+						});
+						stream.pipe(response); //返回文件流
+						*/
 
-						try {
-							//用户访问目录
-							var filedir = filePath.substring(0, filePath.lastIndexOf('\\'));
-							//获取用户访问路径下的文件列表
-							var files = fs.readdirSync(filedir);
-							//将访问路径下的所以文件一一列举出来，并添加超链接，以便用户进一步访问
-							for(var i in files) {
-								var filename = files[i];
-								html += "<div><a  href='" + filename + "'>" + filename + "</a></div>";
-							}
-						} catch(e) {
-							html += "<h1>您访问的目录不存在</h1>"
+					} else { //文件夹存在
+						var filedir = filePath.substring(filePath.lastIndexOf('\\') + 1); //用户访问的当前目录
+						var files = fs.readdirSync(filePath); //获取用户访问路径下的文件列表
+						if(filedir != '') filedir += '/';
+						var html = "<head><meta charset='utf-8'></head>";
+						//将访问路径下的所以文件一一列举出来，并添加超链接，以便用户进一步访问
+						for(var i in files) {
+							var filename = files[i];
+							html += "<div><a  href='" + filedir + filename + "'>" + filename + "</a></div>";
 						}
 						response.writeHead(200, {
 							"content-type": "text/html"
 						});
 						response.end(html);
 					}
+				} else { //文件(夹)不存在
+
+					var html = "<head><meta charset='utf-8'></head><div>文件不存在</div>";
+					response.writeHead(404, {
+						"content-type": "text/html"
+					});
+					response.end(html);
+
+					/*//中间层发起post请求
+					var post_data = {
+						a: 123,
+						time: new Date().getTime()
+					}; //这是需要提交的数据  
+
+					var content = querystring.stringify(post_data);
+
+					var options = {
+						hostname: '127.0.0.1',
+						port: 8081,
+						path: '/view/upload.json',
+						method: 'POST',
+						//headers: {
+						//	'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+						//}
+					};
+
+					var resData='';
+					var req = http.request(options, function(res) {
+						res.on('data', function(chunk) {
+							resData += chunk;
+						});
+					});
+
+					req.on('error', function(e) {
+						console.log('problem with request: ' + e.message);
+					});
+
+					req.write(content); // write data to request body
+
+					req.end();*/
 				}
 			});
 		},
@@ -173,6 +219,7 @@ var http = (function() {
 		///配置信息
 		config: {
 			port: 8081,
+			path: '../layui-cms',
 			ip: '127.0.0.1',
 			mime: {
 				html: "text/html",
@@ -185,7 +232,10 @@ var http = (function() {
 				ico: "image/icon",
 				txt: "text/plain",
 				json: "application/json",
-				default: "application/octet-stream"
+				woff: "text/html",
+				ttf: "text/html",
+				eot: "text/html",
+				default: "application/octet-stream",
 			}
 		}
 	}
